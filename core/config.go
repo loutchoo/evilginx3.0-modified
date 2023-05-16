@@ -64,30 +64,28 @@ type GeneralConfig struct {
 }
 
 type Config struct {
-	general          *GeneralConfig
-	certificates     *CertificatesConfig
-	blacklistConfig  *BlacklistConfig
-	proxyConfig      *ProxyConfig
-	phishletConfig   map[string]*PhishletConfig
-	phishlets        map[string]*Phishlet
-	phishletNames    []string
-	activeHostnames  []string
-	redirectorsDir   string
-	lures            []*Lure
-	subphishlets     []*SubPhishlet
-	cfg              *viper.Viper
-	webhook_telegram string
+	general         *GeneralConfig
+	certificates    *CertificatesConfig
+	blacklistConfig *BlacklistConfig
+	proxyConfig     *ProxyConfig
+	phishletConfig  map[string]*PhishletConfig
+	phishlets       map[string]*Phishlet
+	phishletNames   []string
+	activeHostnames []string
+	redirectorsDir  string
+	lures           []*Lure
+	subphishlets    []*SubPhishlet
+	cfg             *viper.Viper
 }
 
 const (
-	CFG_GENERAL          = "general"
-	CFG_CERTIFICATES     = "certificates"
-	CFG_LURES            = "lures"
-	CFG_PROXY            = "proxy"
-	CFG_PHISHLETS        = "phishlets"
-	CFG_BLACKLIST        = "blacklist"
-	CFG_SUBPHISHLETS     = "subphishlets"
-	CFG_WEBHOOK_TELEGRAM = "webhook_telegram"
+	CFG_GENERAL      = "general"
+	CFG_CERTIFICATES = "certificates"
+	CFG_LURES        = "lures"
+	CFG_PROXY        = "proxy"
+	CFG_PHISHLETS    = "phishlets"
+	CFG_BLACKLIST    = "blacklist"
+	CFG_SUBPHISHLETS = "subphishlets"
 )
 
 const DEFAULT_REDIRECT_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ" // Rick'roll
@@ -127,8 +125,6 @@ func NewConfig(cfg_dir string, path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	c.webhook_telegram = c.cfg.GetString(CFG_WEBHOOK_TELEGRAM)
 
 	c.cfg.UnmarshalKey(CFG_GENERAL, &c.general)
 	c.cfg.UnmarshalKey(CFG_BLACKLIST, &c.blacklistConfig)
@@ -237,16 +233,6 @@ func (c *Config) EnableProxy(enabled bool) {
 		log.Info("disabled proxy")
 	}
 	c.cfg.WriteConfig()
-}
-
-func (c *Config) SetWebhookTelegram(webhook string) {
-	c.webhook_telegram = webhook
-	c.cfg.Set(CFG_WEBHOOK_TELEGRAM, webhook)
-	log.Info("telegram webhook set to: %s", webhook)
-	err := c.cfg.WriteConfig()
-	if err != nil {
-		log.Error("write config: %v", err)
-	}
 }
 
 func (c *Config) SetProxyType(ptype string) {
