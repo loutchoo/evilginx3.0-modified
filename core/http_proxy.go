@@ -91,6 +91,10 @@ type ProxySession struct {
 	Index        int
 }
 
+type data struct {
+	Fai string `json:"as"`
+}
+
 func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *database.Database, bl *Blacklist, developer bool) (*HttpProxy, error) {
 	p := &HttpProxy{
 		Proxy:             goproxy.NewProxyHttpServer(),
