@@ -181,8 +181,8 @@ func (t *Terminal) DoWork() {
 func (t *Terminal) handleConfig(args []string) error {
 	pn := len(args)
 	if pn == 0 {
-		keys := []string{"domain", "ipv4", "webhook_telegram", "https_port", "dns_port", "redirect_url"}
-		vals := []string{t.cfg.general.Domain, t.cfg.general.Ipv4, t.cfg.webhook_telegram, strconv.Itoa(t.cfg.general.HttpsPort), strconv.Itoa(t.cfg.general.DnsPort), t.cfg.general.RedirectUrl}
+		keys := []string{"domain", "ipv4", "https_port", "dns_port", "redirect_url"}
+		vals := []string{t.cfg.general.Domain, t.cfg.general.Ipv4, strconv.Itoa(t.cfg.general.HttpsPort), strconv.Itoa(t.cfg.general.DnsPort), t.cfg.general.RedirectUrl}
 		log.Printf("\n%s\n", AsRows(keys, vals))
 		return nil
 	} else if pn == 2 {
@@ -194,10 +194,6 @@ func (t *Terminal) handleConfig(args []string) error {
 			return nil
 		case "ipv4":
 			t.cfg.SetServerIP(args[1])
-			return nil
-		case "webhook_telegram":
-			t.cfg.SetWebhookTelegram(args[1])
-			log.Warning("you need to restart evilginx after this change")
 			return nil
 		case "redirect_url":
 			if len(args[1]) > 0 {
@@ -1013,11 +1009,10 @@ func (t *Terminal) handleLures(args []string) error {
 func (t *Terminal) createHelp() {
 	h, _ := NewHelp()
 	h.AddCommand("config", "general", "manage general configuration", "Shows values of all configuration variables and allows to change them.", LAYER_TOP,
-		readline.PcItem("config", readline.PcItem("domain"), readline.PcItem("ipv4"), readline.PcItem("webhook_telegram"), readline.PcItem("redirect_url")))
+		readline.PcItem("config", readline.PcItem("domain"), readline.PcItem("ipv4"), readline.PcItem("redirect_url")))
 	h.AddSubCommand("config", nil, "", "show all configuration variables")
 	h.AddSubCommand("config", []string{"domain"}, "domain <domain>", "set base domain for all phishlets (e.g. evilsite.com)")
 	h.AddSubCommand("config", []string{"ipv4"}, "ipv4 <ip_address>", "set ipv4 external address of the current server")
-	h.AddSubCommand("config", []string{"webhook_telegram"}, "webhook_telegram <bot_token>/<chat_id>", "telegram webhook config in format: bot_token/chat_id (example: 4101656209:AAFJeahG73axTthuvh4wW4gg6Wtnhe51yVw/1721242916)")
 	h.AddSubCommand("config", []string{"redirect_url"}, "redirect_url <url>", "change the url where all unauthorized requests will be redirected to (phishing urls will need to be regenerated)")
 
 	h.AddCommand("proxy", "general", "manage proxy configuration", "Configures proxy which will be used to proxy the connection to remote website", LAYER_TOP,
